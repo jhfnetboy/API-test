@@ -121,25 +121,36 @@ app.get('/api/status/:taskId', async (req, res) => {
     try {
         const { taskId } = req.params;
         const query = {
-            Action: 'GetCVTaskResult',
+            Action: 'CVSync2AsyncGetResult',
             Version: '2022-08-31'
         };
         
-        const body = { task_id: taskId };
+        const bodyObj = { 
+            req_key: 'jimeng_t2i_v40', 
+            task_id: taskId 
+        };
+        const bodyString = JSON.stringify(bodyObj);
 
-        const authData = signer.sign('POST', '/', query, {}, body);
+        // Sign using the exact string
+        const authData = signer.sign('POST', '/', query, bodyString);
 
-        const response = await axios.post(BASE_URL, body, {
-             params: query,
-             headers: {
-                 'Authorization': authData.authorization,
-                 'Content-Type': 'application/json',
-                 'Host': authData.host,
-                 'X-Date': authData['x-date']
-             }
-         });
+        const response = await axios({
+            method: 'post', 
+            url: BASE_URL,
+            params: query,
+            data: bodyString,
+            headers: {
+                'Authorization': authData.authorization,
+                'Content-Type': 'application/json',
+                'Host': authData.host,
+                'X-Date': authData['x-date']
+            }
+        });
 
-         res.json(response.data);
+        console.log(`[Status Check] TaskID: ${taskId} | Code: ${response.status}`);
+        console.log(`[Status Payload]`, JSON.stringify(response.data).substring(0, 500));
+
+        res.json(response.data);
 
     } catch (error) {
         console.error("Status Error:", error.response ? error.response.data : error.message);
