@@ -1,6 +1,5 @@
 const dotenv = require('dotenv');
 const path = require('path');
-// Direct import of base service
 const Service = require('@volcengine/openapi/lib/base/service').default;
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -13,10 +12,7 @@ if (!AK || !SK) {
     process.exit(1);
 }
 
-console.log("Service Class:", Service);
-
 try {
-    // Custom Service for CV
     class CVService extends Service {
         constructor() {
             super({
@@ -26,7 +22,7 @@ try {
                 region: 'cn-north-1',
                 host: 'visual.volcengineapi.com',
                 scheme: 'https',
-                serviceName: 'cv' // Critical for signature
+                serviceName: 'cv'
             });
         }
     }
@@ -34,53 +30,47 @@ try {
     const service = new CVService();
     
     async function main() {
-        console.log("🚀 Testing with Custom SDK Service...");
+        console.log("🚀 Testing with String Body...");
         
-        const params = {
-            Action: 'CVSync2AsyncSubmitTask',
-            Version: '2022-08-31',
+        const action = 'CVSync2AsyncSubmitTask';
+        const version = '2022-08-31';
+        
+        const query = {
+            Action: action,
+            Version: version
+        };
+
+        // Serialize manually to ensure consistency
+        const bodyObj = {
             req_key: 'jimeng_t2i_v40',
             prompt: 'A cute cat'
         };
-        
-        try {
-            // Try defining the API action specifically
-            // The base Service usually has 'createRequest' or handles 'json' requests
-            // Let's try specifying method and separating query/body
-            
-            // Attempt 3: Explicitly put Action and Version in query as required by the docs
-            const action = 'CVSync2AsyncSubmitTask';
-            const version = '2022-08-31';
-            
-            const query = {
-                Action: action,
-                Version: version
-            };
-            
-            // Also need to ensure they are NOT duplicated if the SDK adds them automatically.
-            // But based on "SignatureDoesNotMatch", it's likely mismatching what the server expects.
-            
-            const body = {
-                req_key: 'jimeng_t2i_v40',
-                prompt: 'A cute cat'
-            };
+        const bodyString = JSON.stringify(bodyObj);
 
+        try {
             const res = await service.fetchOpenAPI({
                 Action: action,
                 Version: version,
                 method: 'POST', 
                 query: query,   
-                body: body,
+                body: bodyString, // Pass STRING
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
             
-            console.log("✅ SDK Success!");
+            console.log("✅ SDK Success with String Body!");
             console.log(JSON.stringify(res, null, 2));
 
         } catch (err) {
             console.error("❌ SDK Error:", err);
+            // Print extra info if available
+            if (err.response && err.response.text) {
+                try {
+                     const txt = await err.response.text();
+                     console.log("Response Text:", txt);
+                } catch(e){}
+            }
         }
     }
     
