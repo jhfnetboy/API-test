@@ -39,52 +39,75 @@ const signer = new Signer({
 const BASE_URL = 'https://visual.volcengineapi.com';
 
 app.post('/api/generate', async (req, res) => {
+    const traceId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[${traceId}] 📥 Incoming /api/generate request`);
+    
     try {
         const action = 'CVSync2AsyncSubmitTask';
         const version = '2022-08-31';
         
+        // Query params
         const query = {
             Action: action,
             Version: version
         };
+
+        // 1. Log what we received from Frontend
+        console.log(`[${traceId}] Frontend Body:`, JSON.stringify(req.body).substring(0, 200) + "...");
 
         const bodyObj = {
             req_key: 'jimeng_t2i_v40', 
             ...req.body 
         };
         
+        // 2. Serialize and Log the exact string to be signed/sent
         const bodyString = JSON.stringify(bodyObj);
+        console.log(`[${traceId}] 🔒 String to Sign (${bodyString.length} chars):`, bodyString.substring(0, 100) + "...");
 
-        // Debug: Log payload size (Base64 can be huge)
-        console.log(`Payload size: ${bodyString.length} chars`);
+        // 3. Sign
+        const authData = signer.sign('POST', '/', query, bodyString); 
+        console.log(`[${traceId}] 🔑 Signature generated. Credential: ${authData.authorization.split(',')[0]}`);
 
-        const authData = signer.sign('POST', '/', query, {}, bodyObj); 
-
-        console.log("Submitting to Volcengine:", {
-             url: BASE_URL,
-             params: query,
-             // Don't log full body if huge
-             bodyKeys: Object.keys(bodyObj)
-        });
-
-        const response = await axios.post(BASE_URL, bodyObj, {
+        // 4. Send to Volcengine
+        console.log(`[${traceId}] 🚀 Sending to Volcengine...`);
+        const response = await axios({
+            method: 'post',
+            url: BASE_URL,
             params: query,
+            data: bodyString, // Send the exact string
             headers: {
                 'Authorization': authData.authorization,
                 'Content-Type': 'application/json',
                 'Host': authData.host,
                 'X-Date': authData['x-date']
-            }
+            },
+            validateStatus: () => true // Resolve promise for all status codes so we can log them
         });
 
-        res.json(response.data);
+        // 5. Log Response
+        console.log(`[${traceId}] ⬅️ Volcengine Response: Status ${response.status}`);
+        if (response.status !== 200) {
+            console.error(`[${traceId}] ❌ Error Response Body:`, JSON.stringify(response.data, null, 2));
+            console.error(`[${traceId}] ❌ Error RequestId:`, response.headers['x-top-request-id'] || response.data?.ResponseMetadata?.RequestId || 'N/A');
+        }
+
+        // Return to frontend
+        if (response.status === 200) {
+            res.json(response.data);
+        } else {
+            // Forward the specific error from Volcengine to frontend for display
+            res.status(response.status).json(response.data);
+        }
 
     } catch (error) {
-        const errorDetails = error.response ? error.response.data : error.message;
-        console.error("API Error Details:", JSON.stringify(errorDetails, null, 2));
+        console.error(`[${traceId}] 💥 System Error:`, error.message);
+        if (error.response) {
+            console.error(`[${traceId}] External API Error Data:`, JSON.stringify(error.response.data, null, 2));
+        }
         res.status(500).json({ 
-            error: "Failed to submit task", 
-            details: errorDetails
+            error: "Internal Server Error", 
+            traceId: traceId,
+            details: error.message 
         });
     }
 });
