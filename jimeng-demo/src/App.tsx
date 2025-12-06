@@ -22,12 +22,6 @@ function App() {
         
         if (res.code !== 10000) {
            // 10000 is usually success code for Volcengine
-           // But check if the request itself failed or just status check
-           if (res.code) {
-             // Continue polling if code is strictly related to "Processing"? 
-             // Actually Volcengine generic errors might be different.
-             // Standard: 10000 = Success.
-           }
         }
         
         const taskStatus = res?.data?.status;
@@ -39,6 +33,9 @@ function App() {
           // Assuming result is in data.results[0].url
           if (res.data.results && res.data.results.length > 0) {
             setResult(res.data.results[0].url);
+          } else if (res.data.image_urls && res.data.image_urls.length > 0) {
+             // Fallback for different response structures
+             setResult(res.data.image_urls[0]);
           } else {
             setError('Task succeeded but no image URL found.');
           }
@@ -49,8 +46,6 @@ function App() {
         }
       } catch (err: any) {
         console.error('Polling error:', err);
-        // Don't stop polling immediately on network error, maybe transient?
-        // But if 404/500 repeatedly...
       }
     }, 2000);
   };
@@ -65,17 +60,16 @@ function App() {
 
     try {
       const urls = imageUrl ? [imageUrl] : undefined;
+      
       const res = await generateImage(prompt, urls);
       console.log('Generate response:', res);
       
-      // Check for success code (10000 is typical)
-      // Some APIs return code 0 or 200. Let's assume ANY successful HTTP 200 with data.id is okay.
-      if (res.data && res.data.id) {
+      if (res.code === 10000 && res.data && res.data.task_id) {
         setStatus('QUEUED');
-        startPolling(res.data.id);
+        startPolling(res.data.task_id);
       } else {
         setLoading(false);
-        setError(`Failed to submit task: ${res.message || 'Unknown error'}`);
+        setError(`Failed to submit task: ${res.message || 'Unknown error'} (Code: ${res.code})`);
       }
     } catch (err: any) {
       setLoading(false);
@@ -106,9 +100,12 @@ function App() {
             onChange={(e) => setImageUrl(e.target.value)} 
             placeholder="https://example.com/image.jpg" 
           />
+          <p style={{fontSize: '0.8rem', color: '#666', marginTop: '0.2rem'}}>
+            * The API requires a public URL (http/https). Local file uploads are not supported directly.
+          </p>
         </div>
 
-        <button onClick={handleGenerate} disabled={loading || !prompt}>
+        <button onClick={handleGenerate} disabled={loading || !prompt} className="generate-btn">
           {loading ? 'Dreaming...' : 'Generate Art'}
         </button>
 

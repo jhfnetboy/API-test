@@ -1,12 +1,13 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = 'http://localhost:3000/api';
 
 export interface GenerateResponse {
     code: number;
     message: string;
     data: {
-        id: string; // Task ID
+        id: string; // Task ID (sometimes task_id in response but mapped?)
+        task_id?: string; // Add optional task_id
         status: string;
     };
     request_id: string;
@@ -21,6 +22,7 @@ export interface TaskResultResponse {
         results?: Array<{
             url: string;
         }>;
+        image_urls?: string[]; // Add fallback field
     };
 }
 
